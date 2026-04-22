@@ -123,6 +123,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <button class="tab" id="tab-hist" onclick="switchTab('hist')">
         History · 历史 <small>View all · 查看</small>
       </button>
+      <button class="tab" id="tab-set" onclick="switchTab('set')" style="flex:0 0 44px;font-size:18px;padding:10px 0;">&#9881;</button>
     </div>
   </div>
 
@@ -287,14 +288,45 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       </div>
       <div id="log-list"></div>
     </div>
+
+    <!-- SETTINGS -->
+    <div id="panel-set" style="display:none">
+      <div class="card">
+        <div class="sec-label">Real-time sync · 实时同步</div>
+        <p style="font-size:13px;color:#6B6960;line-height:1.7;margin-bottom:14px;">
+          Paste your Firebase Database URL below to sync across all devices instantly.<br>
+          <span style="font-size:12px;color:#A09D96;">将 Firebase 数据库网址粘贴到下方，即可在所有设备间实时同步。</span>
+        </p>
+        <div class="field" style="margin-bottom:14px;">
+          <div class="flbl">Firebase URL</div>
+          <input type="text" id="fb-url" placeholder="https://your-project-default-rtdb.firebaseio.com" style="font-size:12px;">
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button class="btn-save" onclick="saveFirebaseUrl()" style="font-size:14px;padding:12px;">Save &amp; Connect · 保存连接</button>
+          <button class="btn-clear" onclick="clearFirebaseUrl()">Clear · 清除</button>
+        </div>
+        <div id="fb-status" style="font-size:13px;color:#6B6960;line-height:1.6;"></div>
+      </div>
+
+      <div class="card">
+        <div class="sec-label">How to get Firebase URL · 如何获取</div>
+        <ol style="font-size:13px;color:#6B6960;line-height:2;padding-left:18px;">
+          <li>Go to <strong>firebase.google.com</strong> · 前往 Firebase 网站</li>
+          <li>Sign in → Add project → name it <strong>baby-tracker</strong></li>
+          <li>Click <strong>Build → Realtime Database</strong></li>
+          <li>Create Database → Test mode → Enable</li>
+          <li>Copy the URL shown at the top (ends in <em>.firebaseio.com</em>)</li>
+          <li>Paste it above and tap Save · 粘贴到上方并保存</li>
+        </ol>
+      </div>
+    </div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── Storage key — change this to something unique if you want a private log ───
 const SKEY = 'babylog_shared_v4';
-const POLL_MS = 8000;
+const POLL_MS = 5000;
 
 let entries = [];
 let activeType = 'feed';
@@ -305,46 +337,128 @@ let timerInt = null;
 let recSecs = 0;
 let liveTranscript = '';
 let finalTranscript = '';
+let pollInterval = null;
 
 const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+// ─── Firebase helpers ──────────────────────────────────────────────────────
+function getFirebaseUrl() {
+  return localStorage.getItem('fb_url_v1') || '';
+}
+
+function saveFirebaseUrl() {
+  const url = document.getElementById('fb-url').value.trim().replace(/\/+$/, '');
+  if (!url || !url.includes('firebaseio.com')) {
+    showFbStatus('Please enter a valid Firebase URL · 请输入正确的 Firebase 网址', 'red');
+    return;
+  }
+  localStorage.setItem('fb_url_v1', url);
+  document.getElementById('fb-url').value = url;
+  showFbStatus('Connected! Loading data... · 已连接，正在加载数据...', 'green');
+  restartPoll();
+  loadData(false);
+}
+
+function clearFirebaseUrl() {
+  localStorage.removeItem('fb_url_v1');
+  document.getElementById('fb-url').value = '';
+  showFbStatus('Cleared. Using local storage only. · 已清除，仅使用本地存储。', '');
+  restartPoll();
+}
+
+function showFbStatus(msg, color) {
+  const el = document.getElementById('fb-status');
+  if (el) { el.textContent = msg; el.style.color = color === 'red' ? '#C0392B' : color === 'green' ? '#2D5A3D' : '#6B6960'; }
+}
+
+function restartPoll() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(() => loadData(true), POLL_MS);
+}
 
 // ─── Init ──────────────────────────────────────────────────────────────────
 window.onload = () => {
   document.getElementById('etime').placeholder = nowHH();
   if (isWeChat) document.getElementById('wechat-warn').style.display = 'block';
   else if (!SpeechRecognition) document.getElementById('unsupported-warn').style.display = 'block';
+  // Pre-fill saved Firebase URL in settings
+  const saved = getFirebaseUrl();
+  if (saved) {
+    document.getElementById('fb-url').value = saved;
+    showFbStatus('Connected · 已连接 ' + saved.split('/')[2], 'green');
+  }
   loadData(false);
-  setInterval(() => loadData(true), POLL_MS);
+  restartPoll();
 };
 
-// ─── Sync (localStorage shared via storage event across tabs; same-device sync) ──
-function loadData(quiet) {
+// ─── Sync ──────────────────────────────────────────────────────────────────
+async function loadData(quiet) {
   if (!quiet) setSyncState('busy');
-  try {
-    const raw = localStorage.getItem(SKEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (JSON.stringify(parsed) !== JSON.stringify(entries)) {
-        entries = parsed;
+  const fbUrl = getFirebaseUrl();
+  if (fbUrl) {
+    // Firebase sync
+    try {
+      const resp = await fetch(fbUrl + '/entries.json');
+      if (!resp.ok) throw new Error('fetch failed');
+      const data = await resp.json();
+      const loaded = data ? Object.values(data).sort((a,b) => new Date(b.time) - new Date(a.time)) : [];
+      if (JSON.stringify(loaded) !== JSON.stringify(entries)) {
+        entries = loaded;
         if (document.getElementById('panel-hist').style.display !== 'none') renderLog();
       }
+      setSyncState('ok');
+    } catch(e) {
+      setSyncState('err');
     }
-    setSyncState('ok');
-  } catch(e) { setSyncState('err'); }
+  } else {
+    // localStorage fallback
+    try {
+      const raw = localStorage.getItem(SKEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (JSON.stringify(parsed) !== JSON.stringify(entries)) {
+          entries = parsed;
+          if (document.getElementById('panel-hist').style.display !== 'none') renderLog();
+        }
+      }
+      setSyncState('ok');
+    } catch(e) { setSyncState('err'); }
+  }
 }
 
-function persist() {
-  try {
-    localStorage.setItem(SKEY, JSON.stringify(entries));
-    localStorage.setItem(SKEY+'_ts', Date.now());
-    setSyncState('ok');
-  } catch(e) { setSyncState('err'); }
+async function persist() {
+  const fbUrl = getFirebaseUrl();
+  if (fbUrl) {
+    // Write all entries to Firebase
+    setSyncState('busy');
+    try {
+      // Store as object keyed by id for easy merge
+      const obj = {};
+      entries.forEach(e => { obj['e' + e.id] = e; });
+      const resp = await fetch(fbUrl + '/entries.json', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(obj)
+      });
+      if (!resp.ok) throw new Error('write failed');
+      setSyncState('ok');
+    } catch(e) {
+      setSyncState('err');
+      toast('Sync failed · 同步失败');
+    }
+  } else {
+    // localStorage fallback
+    try {
+      localStorage.setItem(SKEY, JSON.stringify(entries));
+      setSyncState('ok');
+    } catch(e) { setSyncState('err'); }
+  }
 }
 
 // Listen for changes from other tabs on same device
 window.addEventListener('storage', e => {
-  if (e.key === SKEY) loadData(true);
+  if (e.key === SKEY || e.key === 'fb_url_v1') loadData(true);
 });
 
 function setSyncState(s) {
@@ -358,10 +472,12 @@ function setSyncState(s) {
 
 // ─── Tab / type ────────────────────────────────────────────────────────────
 function switchTab(t) {
-  document.getElementById('panel-log').style.display = t==='log'?'block':'none';
-  document.getElementById('panel-hist').style.display = t==='hist'?'block':'none';
-  document.getElementById('tab-log').classList.toggle('active', t==='log');
-  document.getElementById('tab-hist').classList.toggle('active', t==='hist');
+  ['log','hist','set'].forEach(p => {
+    const panel = document.getElementById('panel-'+p);
+    if (panel) panel.style.display = t===p?'block':'none';
+    const tab = document.getElementById('tab-'+p);
+    if (tab) tab.classList.toggle('active', t===p);
+  });
   if (t==='hist') { loadData(false); renderLog(); }
 }
 
