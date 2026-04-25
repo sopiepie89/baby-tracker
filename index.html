@@ -190,9 +190,13 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         <!-- Sleep -->
         <div id="ff-sleep" style="display:none">
           <div class="field-row">
-            <div class="field" style="flex:0 0 110px">
-              <div class="flbl">Duration (min) · <span>时长</span></div>
-              <input type="number" id="s-dur" placeholder="45" min="0">
+            <div class="field" style="flex:0 0 90px">
+              <div class="flbl">Hours · <span>小时</span></div>
+              <input type="number" id="s-hr" placeholder="0" min="0" max="24">
+            </div>
+            <div class="field" style="flex:0 0 90px">
+              <div class="flbl">Minutes · <span>分钟</span></div>
+              <input type="number" id="s-min" placeholder="0" min="0" max="59">
             </div>
             <div class="field">
               <div class="flbl">Location · <span>地点</span></div>
@@ -270,7 +274,6 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <div id="panel-hist" style="display:none">
       <div class="stats-grid">
         <div class="stat"><div class="stat-lbl">Formula <span class="zh">配方奶</span></div><div class="stat-val" id="st-ml">0ml</div><div class="stat-sub">consumed today · 今天</div></div>
-        <div class="stat"><div class="stat-lbl">Prepared <span class="zh">准备</span></div><div class="stat-val" id="st-prepared">0ml</div><div class="stat-sub">today · 今天</div></div>
         <div class="stat"><div class="stat-lbl">Sleep <span class="zh">睡眠</span></div><div class="stat-val" id="st-sleep">0m</div><div class="stat-sub">today · 今天</div></div>
         <div class="stat"><div class="stat-lbl">Diapers <span class="zh">换尿布</span></div><div class="stat-val" id="st-diapers">0</div><div class="stat-sub">today · 今天</div></div>
       </div>
@@ -513,9 +516,12 @@ function getDetail() {
     return d;
   }
   if (activeType==='sleep') {
-    const dur=document.getElementById('s-dur').value;
+    const hr=parseInt(document.getElementById('s-hr').value)||0;
+    const mn=parseInt(document.getElementById('s-min').value)||0;
+    const totalMin=hr*60+mn;
     const loc=document.getElementById('s-loc').value.split(' · ')[0];
-    return loc+(dur?' · '+dur+' min':'');
+    const durStr=hr>0?(mn>0?hr+'h '+mn+'m':hr+'h'):(mn>0?mn+'m':'');
+    return loc+(durStr?' · '+durStr:'');
   }
   if (activeType==='diaper') {
     const tp=document.getElementById('d-type').value.split(' · ')[0];
@@ -527,7 +533,9 @@ function getDetail() {
 
 function saveEntry() {
   const n=document.getElementById('notes').value.trim();
-  const sleepDurMin = activeType==='sleep'?(parseInt(document.getElementById('s-dur').value)||0):0;
+  const sleepHr  = activeType==='sleep'?(parseInt(document.getElementById('s-hr').value)||0):0;
+  const sleepMin2 = activeType==='sleep'?(parseInt(document.getElementById('s-min').value)||0):0;
+  const sleepDurMin = sleepHr*60+sleepMin2;
   const prepared = activeType==='feed'?(parseInt(document.getElementById('f-prepared').value)||0):0;
   const left     = activeType==='feed'?(parseInt(document.getElementById('f-left').value)||0):0;
   const consumed = prepared>0?(prepared-left):0;
@@ -550,7 +558,7 @@ function saveEntry() {
 }
 
 function clearForm() {
-  ['f-prepared','f-left','f-brand','s-dur','d-color','etime','notes'].forEach(id => {
+  ['f-prepared','f-left','f-brand','s-hr','s-min','d-color','etime','notes'].forEach(id => {
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('etime').placeholder=nowHH();
@@ -762,7 +770,11 @@ function applyParsed(p, rawText) {
   if (!p.ml_prepared && p.ml) document.getElementById('f-prepared').value = p.ml;
   if (p.brand) document.getElementById('f-brand').value = p.brand;
 
-  if (p.duration_min) document.getElementById('s-dur').value = p.duration_min;
+  if (p.duration_min) {
+    const ph=Math.floor(p.duration_min/60), pm=p.duration_min%60;
+    document.getElementById('s-hr').value = ph||'';
+    document.getElementById('s-min').value = pm||'';
+  }
   if (p.sleep_location) {
     const sel = document.getElementById('s-loc');
     [...sel.options].forEach(o => { if (o.value.startsWith(p.sleep_location)) sel.value=o.value; });
@@ -808,8 +820,13 @@ function fmtTime(iso) {
 }
 
 function fmtSleep(m) {
-  m=parseInt(m)||0;
-  return m>=60?Math.floor(m/60)+'h '+(m%60)+'m':m+'m';
+  m=Math.round(parseFloat(m))||0;
+  if (m<=0) return '—';
+  if (m>=60) {
+    const h=Math.floor(m/60), rem=m%60;
+    return rem>0 ? h+'h '+rem+'m' : h+'h';
+  }
+  return m+'m';
 }
 
 function renderLog() {
@@ -822,7 +839,6 @@ function renderLog() {
     return s+(e.duration_min||parseInt((e.detail.match(/(\d+) min/)||[])[1])||0);
   },0);
   document.getElementById('st-ml').textContent=todMlConsumed+'ml';
-  document.getElementById('st-prepared').textContent=todMlPrepared+'ml';
   document.getElementById('st-sleep').textContent=fmtSleep(todSleepMin);
   document.getElementById('st-diapers').textContent=tod.filter(e=>e.type==='diaper').length;
 
