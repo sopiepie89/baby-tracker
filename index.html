@@ -170,23 +170,19 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         <!-- Feed -->
         <div id="ff-feed">
           <div class="field-row">
-            <div class="field" style="flex:0 0 100px">
-              <div class="flbl">ml · <span>毫升</span></div>
-              <input type="number" id="f-ml" placeholder="90" min="0" max="300" step="5">
+            <div class="field">
+              <div class="flbl">Milk prepared · <span>准备了多少毫升</span></div>
+              <input type="number" id="f-prepared" placeholder="e.g. 90 ml" min="0" max="500" step="5">
             </div>
             <div class="field">
-              <div class="flbl">Brand · <span>品牌</span></div>
-              <input type="text" id="f-brand" placeholder="e.g. Similac">
+              <div class="flbl">Milk left · <span>剩余毫升</span></div>
+              <input type="number" id="f-left" placeholder="e.g. 10 ml" min="0" max="500" step="5">
             </div>
           </div>
           <div class="field-row">
             <div class="field">
-              <div class="flbl">Finished? · <span>喝完了吗</span></div>
-              <select id="f-fin">
-                <option value="yes">All done · 全部喝完</option>
-                <option value="partial">Partial · 喝了一部分</option>
-                <option value="refused">Refused · 拒绝喝</option>
-              </select>
+              <div class="flbl">Brand · <span>品牌</span></div>
+              <input type="text" id="f-brand" placeholder="e.g. Similac">
             </div>
           </div>
         </div>
@@ -273,8 +269,8 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <!-- HISTORY -->
     <div id="panel-hist" style="display:none">
       <div class="stats-grid">
-        <div class="stat"><div class="stat-lbl">Feeds <span class="zh">喂奶</span></div><div class="stat-val" id="st-feeds">0</div><div class="stat-sub">today · 今天</div></div>
-        <div class="stat"><div class="stat-lbl">Formula <span class="zh">配方奶</span></div><div class="stat-val" id="st-ml">0ml</div><div class="stat-sub">today · 今天</div></div>
+        <div class="stat"><div class="stat-lbl">Formula <span class="zh">配方奶</span></div><div class="stat-val" id="st-ml">0ml</div><div class="stat-sub">consumed today · 今天</div></div>
+        <div class="stat"><div class="stat-lbl">Prepared <span class="zh">准备</span></div><div class="stat-val" id="st-prepared">0ml</div><div class="stat-sub">today · 今天</div></div>
         <div class="stat"><div class="stat-lbl">Sleep <span class="zh">睡眠</span></div><div class="stat-val" id="st-sleep">0m</div><div class="stat-sub">today · 今天</div></div>
         <div class="stat"><div class="stat-lbl">Diapers <span class="zh">换尿布</span></div><div class="stat-val" id="st-diapers">0</div><div class="stat-sub">today · 今天</div></div>
       </div>
@@ -506,13 +502,14 @@ function resolveTime() {
 
 function getDetail() {
   if (activeType==='feed') {
-    const ml=document.getElementById('f-ml').value;
+    const prepared=parseInt(document.getElementById('f-prepared').value)||0;
+    const left=parseInt(document.getElementById('f-left').value)||0;
+    const consumed=prepared>0?(prepared-left):0;
     const brand=document.getElementById('f-brand').value;
-    const fin=document.getElementById('f-fin').value;
-    let d=ml?ml+'ml formula':'Formula feeding';
+    let d=prepared?`Prepared ${prepared}ml`:'Formula feeding';
+    if (prepared>0) d+=` · Drank ${consumed}ml`;
+    if (left>0) d+=` · Left ${left}ml`;
     if (brand) d+=' · '+brand;
-    if (fin==='partial') d+=' (partial)';
-    if (fin==='refused') d+=' (refused)';
     return d;
   }
   if (activeType==='sleep') {
@@ -530,13 +527,20 @@ function getDetail() {
 
 function saveEntry() {
   const n=document.getElementById('notes').value.trim();
+  const sleepDurMin = activeType==='sleep'?(parseInt(document.getElementById('s-dur').value)||0):0;
+  const prepared = activeType==='feed'?(parseInt(document.getElementById('f-prepared').value)||0):0;
+  const left     = activeType==='feed'?(parseInt(document.getElementById('f-left').value)||0):0;
+  const consumed = prepared>0?(prepared-left):0;
   const entry = {
     id: Date.now(),
     type: activeType,
     caregiver: document.getElementById('carer').value.split(' · ')[0],
     time: resolveTime(),
     detail: getDetail(),
-    ml: activeType==='feed'?(parseInt(document.getElementById('f-ml').value)||0):0,
+    ml: consumed,
+    ml_prepared: prepared,
+    ml_left: left,
+    duration_min: sleepDurMin,
     notes: n
   };
   entries.unshift(entry);
@@ -546,7 +550,7 @@ function saveEntry() {
 }
 
 function clearForm() {
-  ['f-ml','f-brand','s-dur','d-color','etime','notes'].forEach(id => {
+  ['f-prepared','f-left','f-brand','s-dur','d-color','etime','notes'].forEach(id => {
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('etime').placeholder=nowHH();
@@ -657,24 +661,67 @@ function parseAndFill(text) {
   else if (sleepKw.test(t))  p.type='sleep';
   else if (feedKw.test(t))   p.type='feed';
 
-  // ── ML amount ────────────────────────────────────────────────────────
-  // Matches: 60ml, 60 ml, 60毫升, 六十毫升, 60 mL, 60cc
-  const mlMatch = t.match(/(\d+(?:\.\d+)?)\s*(?:ml|毫升|cc|mL|millili)/i)
-    || t.match(/([一二三四五六七八九十百两\d]+)\s*(?:毫升|ml|mL|cc)/i);
-  if (mlMatch) {
-    const val = zhNum(mlMatch[1]);
-    if (val && val > 0) { p.ml = val; p.type = p.type || 'feed'; }
+  // ── ML amounts — prepared and left ──────────────────────────────────
+  // Find all ml numbers in text
+  const mlPattern = /(\d+(?:\.\d+)?|[一二三四五六七八九十百两]+)\s*(?:ml|毫升|cc|mL)/gi;
+  const allMl = [];
+  let mlM;
+  while ((mlM=mlPattern.exec(t))!==null) {
+    const v=zhNum(mlM[1]); if(v&&v>0) allMl.push({val:v, idx:mlM.index, raw:mlM[0]});
+  }
+  if (allMl.length>=2) {
+    // Two numbers: interpret as prepared + left (e.g. "prepared 90ml, 10ml left")
+    const leftHint = /left|remain|剩|余|没喝完/i;
+    // The one near "left/剩" is ml_left
+    const leftIdx = allMl.findIndex(m => leftHint.test(t.slice(Math.max(0,m.idx-15), m.idx+m.raw.length+15)));
+    if (leftIdx >= 0) {
+      p.ml_left = allMl[leftIdx].val;
+      p.ml_prepared = allMl[leftIdx===0?1:0].val;
+    } else {
+      p.ml_prepared = allMl[0].val; p.ml_left = allMl[1].val;
+    }
+    p.ml = p.ml_prepared - p.ml_left;
+    p.type = p.type || 'feed';
+  } else if (allMl.length===1) {
+    // One number: check if it's described as "left" or "drank"
+    const seg = t.slice(Math.max(0,allMl[0].idx-20), allMl[0].idx+allMl[0].raw.length+20);
+    if (/left|remain|剩|余/.test(seg)) {
+      p.ml_left = allMl[0].val;
+    } else {
+      p.ml_prepared = allMl[0].val;
+    }
+    p.ml = allMl[0].val;
+    p.type = p.type || 'feed';
   }
 
   // ── Sleep duration ───────────────────────────────────────────────────
-  // "45 minutes", "1 hour", "一个小时", "四十五分钟"
-  const hrMatch  = t.match(/(\d+(?:\.\d+)?|[一两二三四五六七八九十百]+)\s*(?:hour|hr|小时|钟)/i);
-  const minMatch = t.match(/(\d+(?:\.\d+)?|[一两二三四五六七八九十百]+)\s*(?:min|分钟|分)/i);
-  if (hrMatch || minMatch) {
-    let total = 0;
-    if (hrMatch)  total += (zhNum(hrMatch[1])||0) * 60;
-    if (minMatch) total += (zhNum(minMatch[1])||0);
-    if (total > 0) { p.duration_min = total; p.type = p.type || 'sleep'; }
+  // handles: "2 hours", "1.5 hours", "90 minutes", "1 hour 30 minutes",
+  //          "两个小时", "一个半小时", "九十分钟", "120分钟"
+  {
+    let totalMin = 0;
+    // Hours (decimal ok: 1.5 hours = 90 min)
+    const hrM = t.match(/(\d+(?:\.\d+)?|[一两二三四五六七八九十百半]+)\s*(?:hour|hr|小时|钟头)/i);
+    if (hrM) {
+      let hv = parseFloat(hrM[1]);
+      if (isNaN(hv)) hv = zhNum(hrM[1]) || 0;
+      // handle "一个半" = 1.5
+      if (/半/.test(hrM[1])) hv = Math.floor(hv) + 0.5;
+      totalMin += hv * 60;
+    }
+    // Minutes (standalone, or after hours)
+    const minM = t.match(/(\d+(?:\.\d+)?|[一两二三四五六七八九十百]+)\s*(?:min|minute|分钟|分(?!之))/i);
+    if (minM) {
+      let mv = parseFloat(minM[1]);
+      if (isNaN(mv)) mv = zhNum(minM[1]) || 0;
+      totalMin += mv;
+    }
+    // Pure number of minutes if no unit but sleep context ("slept 90")
+    if (totalMin===0) {
+      const pureMin = t.match(/(?:slept?|睡了?|睡了约?)\s*(\d+)(?!\s*(?:hour|hr|小时))/i);
+      if (pureMin) totalMin = parseInt(pureMin[1]);
+    }
+    totalMin = Math.round(totalMin);
+    if (totalMin > 0) { p.duration_min = totalMin; p.type = p.type || 'sleep'; }
   }
 
   // ── Finished / refused ───────────────────────────────────────────────
@@ -709,9 +756,11 @@ function parseAndFill(text) {
 function applyParsed(p, rawText) {
   if (p.type && ['feed','sleep','diaper','note'].includes(p.type)) selType(p.type);
 
-  if (p.ml)    document.getElementById('f-ml').value = p.ml;
+  if (p.ml_prepared) document.getElementById('f-prepared').value = p.ml_prepared;
+  if (p.ml_left !== undefined && p.ml_left >= 0) document.getElementById('f-left').value = p.ml_left;
+  // fallback: if only 'ml' parsed (consumed), put it as prepared
+  if (!p.ml_prepared && p.ml) document.getElementById('f-prepared').value = p.ml;
   if (p.brand) document.getElementById('f-brand').value = p.brand;
-  if (p.finished) document.getElementById('f-fin').value = p.finished;
 
   if (p.duration_min) document.getElementById('s-dur').value = p.duration_min;
   if (p.sleep_location) {
@@ -767,13 +816,14 @@ function renderLog() {
   const today=new Date().toDateString();
   const tod=entries.filter(e=>new Date(e.time).toDateString()===today);
   const todF=tod.filter(e=>e.type==='feed');
-  const todMl=todF.reduce((s,e)=>s+(e.ml||0),0);
-  const todSleep=tod.filter(e=>e.type==='sleep').reduce((s,e)=>{
-    const m=parseInt((e.detail.match(/(\d+) min/)||[])[1]||0); return s+m;
+  const todMlConsumed=todF.reduce((s,e)=>s+(e.ml||0),0);
+  const todMlPrepared=todF.reduce((s,e)=>s+(e.ml_prepared||e.ml||0),0);
+  const todSleepMin=tod.filter(e=>e.type==='sleep').reduce((s,e)=>{
+    return s+(e.duration_min||parseInt((e.detail.match(/(\d+) min/)||[])[1])||0);
   },0);
-  document.getElementById('st-feeds').textContent=todF.length;
-  document.getElementById('st-ml').textContent=todMl+'ml';
-  document.getElementById('st-sleep').textContent=fmtSleep(todSleep);
+  document.getElementById('st-ml').textContent=todMlConsumed+'ml';
+  document.getElementById('st-prepared').textContent=todMlPrepared+'ml';
+  document.getElementById('st-sleep').textContent=fmtSleep(todSleepMin);
   document.getElementById('st-diapers').textContent=tod.filter(e=>e.type==='diaper').length;
 
   const shown=filter==='all'?entries:entries.filter(e=>e.type===filter);
@@ -784,15 +834,36 @@ function renderLog() {
   }
   list.innerHTML=shown.map(e=>{
     const T=TYPES[e.type]||TYPES.note;
+    // Build smart detail line for feed
+    let detailLine = e.detail || '';
+    if (e.type==='feed') {
+      const consumed = e.ml || 0;
+      const prepared = e.ml_prepared || consumed;
+      const left = e.ml_left != null ? e.ml_left : (prepared - consumed);
+      const parts = [];
+      if (prepared) parts.push(`Prepared ${prepared}ml`);
+      if (consumed) parts.push(`Drank ${consumed}ml`);
+      if (left > 0)  parts.push(`Left ${left}ml`);
+      if (e.ml_brand || (e.detail && e.detail.includes('·'))) {
+        const brand = e.detail ? e.detail.split('·').slice(-1)[0].trim() : '';
+        if (brand && !brand.includes('ml') && !brand.includes('Prepared') && !brand.includes('Drank')) parts.push(brand);
+      }
+      detailLine = parts.join(' · ');
+    }
+    if (e.type==='sleep' && e.duration_min) {
+      const loc = e.detail ? e.detail.split(' · ')[0] : '';
+      detailLine = (loc?loc+' · ':'')+fmtSleep(e.duration_min);
+    }
+    const carerBadge = e.caregiver ? `<span class="ecarer">${e.caregiver}</span>` : '';
     return `<div class="entry">
       <div class="eicon" style="background:${T.bg}">${T.icon}</div>
       <div class="ebody">
         <div class="eheader">
           <span class="etype">${T.en} · ${T.zh}</span>
           <span class="etime">${fmtTime(e.time)}</span>
-          <span class="ecarer">${e.caregiver}</span>
+          ${carerBadge}
         </div>
-        ${e.detail?`<div class="edetail">${e.detail}</div>`:''}
+        ${detailLine?`<div class="edetail">${detailLine}</div>`:''}
         ${e.notes?`<div class="enotes">${e.notes}</div>`:''}
       </div>
       <button class="edel" onclick="delEntry(${e.id})">×</button>
