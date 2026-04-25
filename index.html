@@ -677,23 +677,40 @@ function parseAndFill(text) {
   while ((mlM=mlPattern.exec(t))!==null) {
     const v=zhNum(mlM[1]); if(v&&v>0) allMl.push({val:v, idx:mlM.index, raw:mlM[0]});
   }
+  // For each ml number, grab the 25 chars BEFORE it to find its label
+  function labelBefore(idx) { return t.slice(Math.max(0,idx-25), idx).toLowerCase(); }
+  const leftKw    = /left|remain|剩|余|没喝完|剩余/;
+  const prepKw    = /prepar|prepared|made|冲|准备|冲了|冲好/;
+
   if (allMl.length>=2) {
-    // Two numbers: interpret as prepared + left (e.g. "prepared 90ml, 10ml left")
-    const leftHint = /left|remain|剩|余|没喝完/i;
-    // The one near "left/剩" is ml_left
-    const leftIdx = allMl.findIndex(m => leftHint.test(t.slice(Math.max(0,m.idx-15), m.idx+m.raw.length+15)));
-    if (leftIdx >= 0) {
-      p.ml_left = allMl[leftIdx].val;
-      p.ml_prepared = allMl[leftIdx===0?1:0].val;
+    // Score each number: does the text before it say "prepared" or "left"?
+    let prepIdx=-1, leftIdx2=-1;
+    allMl.forEach((m,i)=>{
+      const before = labelBefore(m.idx);
+      if (prepKw.test(before)) prepIdx=i;
+      if (leftKw.test(before))  leftIdx2=i;
+    });
+    if (prepIdx>=0 && leftIdx2>=0 && prepIdx!==leftIdx2) {
+      p.ml_prepared = allMl[prepIdx].val;
+      p.ml_left     = allMl[leftIdx2].val;
+    } else if (leftIdx2>=0) {
+      // Only "left" keyword found — the other number is prepared
+      p.ml_left     = allMl[leftIdx2].val;
+      p.ml_prepared = allMl[leftIdx2===0?1:0].val;
+    } else if (prepIdx>=0) {
+      // Only "prepared" keyword found — the other number is left
+      p.ml_prepared = allMl[prepIdx].val;
+      p.ml_left     = allMl[prepIdx===0?1:0].val;
     } else {
-      p.ml_prepared = allMl[0].val; p.ml_left = allMl[1].val;
+      // No keywords — assume first = prepared, second = left (natural speech order)
+      p.ml_prepared = allMl[0].val;
+      p.ml_left     = allMl[1].val;
     }
-    p.ml = p.ml_prepared - p.ml_left;
+    p.ml = Math.max(0, p.ml_prepared - p.ml_left);
     p.type = p.type || 'feed';
   } else if (allMl.length===1) {
-    // One number: check if it's described as "left" or "drank"
-    const seg = t.slice(Math.max(0,allMl[0].idx-20), allMl[0].idx+allMl[0].raw.length+20);
-    if (/left|remain|剩|余/.test(seg)) {
+    const before = labelBefore(allMl[0].idx);
+    if (leftKw.test(before)) {
       p.ml_left = allMl[0].val;
     } else {
       p.ml_prepared = allMl[0].val;
@@ -703,31 +720,44 @@ function parseAndFill(text) {
   }
 
   // ── Sleep duration ───────────────────────────────────────────────────
-  // handles: "2 hours", "1.5 hours", "90 minutes", "1 hour 30 minutes",
-  //          "两个小时", "一个半小时", "九十分钟", "120分钟"
+  // handles: "2 hours", "1.5 hours", "1 hour 30 minutes", "90 minutes"
+  //          "两个小时", "一个半小时", "1个半小时", "九十分钟", "120分钟"
+  //          个 is a Chinese counter word and must be allowed between number and 小时
   {
     let totalMin = 0;
-    // Hours (decimal ok: 1.5 hours = 90 min)
-    const hrM = t.match(/(\d+(?:\.\d+)?|[一两二三四五六七八九十百半]+)\s*(?:hour|hr|小时|钟头)/i);
+
+    // Match pattern: [number][个?][半?]小时 — e.g. 1个半小时, 两个小时, 1.5小时
+    // Captures the number part before 个/半/小时
+    const hrM = t.match(/(\d+(?:\.\d+)?|[一两二三四五六七八九十百]+)\s*个?\s*半?\s*(?:hour|hr|小时|钟头)/i);
     if (hrM) {
       let hv = parseFloat(hrM[1]);
       if (isNaN(hv)) hv = zhNum(hrM[1]) || 0;
-      // handle "一个半" = 1.5
-      if (/半/.test(hrM[1])) hv = Math.floor(hv) + 0.5;
+      // Check if "半" appears between the number and 小时 — adds 0.5 hours
+      const segment = t.slice(hrM.index, hrM.index + hrM[0].length);
+      if (/半/.test(segment)) hv = Math.floor(hv) + 0.5;
       totalMin += hv * 60;
     }
-    // Minutes (standalone, or after hours)
+
+    // Also check standalone 半小时 (without a leading number) = 30 min
+    // but only if no hours were already found (avoid double-counting)
+    if (totalMin === 0 && /半小时/.test(t)) totalMin = 30;
+
+    // Minutes (standalone, or added after hours)
     const minM = t.match(/(\d+(?:\.\d+)?|[一两二三四五六七八九十百]+)\s*(?:min|minute|分钟|分(?!之))/i);
     if (minM) {
       let mv = parseFloat(minM[1]);
       if (isNaN(mv)) mv = zhNum(minM[1]) || 0;
+      // Don't double-count if this minute number is part of "X小时Y分" pattern
+      // by checking it's not the same position as what hrM already consumed
       totalMin += mv;
     }
-    // Pure number of minutes if no unit but sleep context ("slept 90")
-    if (totalMin===0) {
-      const pureMin = t.match(/(?:slept?|睡了?|睡了约?)\s*(\d+)(?!\s*(?:hour|hr|小时))/i);
+
+    // Pure number after sleep keyword e.g. "slept 90"
+    if (totalMin === 0) {
+      const pureMin = t.match(/(?:slept?|睡了?|睡了约?)\s*(\d+)(?!\s*(?:hour|hr|小时|个))/i);
       if (pureMin) totalMin = parseInt(pureMin[1]);
     }
+
     totalMin = Math.round(totalMin);
     if (totalMin > 0) { p.duration_min = totalMin; p.type = p.type || 'sleep'; }
   }
