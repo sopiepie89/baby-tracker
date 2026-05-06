@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="宝宝日志">
+<title>宝宝日志 · Baby Log</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#FAFAF8;--surface:#fff;--surface2:#F4F2EE;
+  --border:rgba(0,0,0,0.09);--border2:rgba(0,0,0,0.16);
+  --text:#1A1916;--text2:#6B6960;--text3:#A09D96;
+  --accent:#2D5A3D;--accent-lt:#EAF2EC;
+  --red:#C0392B;--radius:14px;--rsm:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);font-family:'DM Sans','Noto Sans SC',sans-serif;color:var(--text)}
+.app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+.header{padding:20px 16px 0}
+.header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.app-title{font-size:21px;font-weight:500;letter-spacing:-0.3px}
+.sync-badge{font-size:11px;color:var(--text3);display:flex;align-items:center;gap:5px}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:#27AE60;flex-shrink:0}
+.sync-dot.err{background:var(--red)}
+.sync-dot.busy{background:#F39C12;animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.header-sub{font-size:11px;color:var(--text3);margin-bottom:14px}
+.tabs{display:flex;gap:6px;margin-bottom:14px}
+.tab{flex:1;padding:10px 6px;border-radius:10px;border:1px solid var(--border);font-size:13px;font-weight:500;cursor:pointer;background:var(--surface);color:var(--text2);text-align:center;font-family:inherit;transition:all .15s}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tab small{display:block;font-size:10px;font-weight:400;opacity:.8;margin-top:1px}
+.content{flex:1;padding:0 16px 32px}
+.card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06),0 4px 10px rgba(0,0,0,.03)}
+.sec-label{font-size:10px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.type-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px}
+.type-btn{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:var(--rsm);border:1.5px solid var(--border);background:var(--surface2);cursor:pointer;font-family:inherit;transition:all .15s;width:100%;text-align:left}
+.type-btn.active{border-color:var(--accent);background:var(--accent-lt)}
+.type-icon{font-size:20px;line-height:1;flex-shrink:0}
+.type-en{font-size:12px;font-weight:500;color:var(--text);display:block}
+.type-zh{font-size:10px;color:var(--text2);display:block}
+.field-row{display:flex;gap:10px;margin-bottom:12px}
+.field{display:flex;flex-direction:column;gap:4px;flex:1}
+.flbl{font-size:10px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.06em}
+.flbl span{font-size:10px;text-transform:none;letter-spacing:0;font-weight:400;margin-left:3px;color:var(--text3)}
+input[type=text],input[type=number],select,textarea{width:100%;padding:10px 12px;border-radius:var(--rsm);border:1px solid var(--border2);background:var(--surface2);font-size:14px;color:var(--text);font-family:inherit;outline:none;-webkit-appearance:none;appearance:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);background:#fff}
+textarea{min-height:70px;resize:none;line-height:1.5}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23A09D96'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:28px}
+
+/* Voice */
+.voice-box{background:var(--surface2);border-radius:var(--rsm);padding:14px;margin-bottom:12px}
+.voice-hint{font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px}
+.voice-hint .zh{font-size:11px;color:var(--text3)}
+.voice-ctrl{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rbtn{display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:20px;border:none;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s}
+.rbtn.go{background:var(--red);color:#fff}
+.rbtn.go:active{opacity:.85}
+.rbtn.stop{background:var(--surface);color:var(--text);border:1px solid var(--border2)}
+.rdot{width:8px;height:8px;border-radius:50%;background:#fff;flex-shrink:0}
+.rdot.on{animation:blink .9s infinite}
+.rtimer{font-size:13px;font-weight:500;color:var(--red);min-width:32px}
+.rstatus{font-size:12px;color:var(--text3);font-style:italic}
+.voice-live{font-size:13px;color:var(--text2);margin-top:10px;font-style:italic;min-height:18px;line-height:1.5}
+.wechat-warn{font-size:11px;color:#856404;background:#fff8cd;border-radius:8px;padding:10px 12px;margin-top:8px;line-height:1.6;display:none}
+.unsupported-warn{font-size:12px;color:var(--red);background:#fdf2f2;border-radius:8px;padding:10px 12px;margin-top:8px;line-height:1.6;display:none}
+
+.btn-row{display:flex;gap:8px;margin-top:14px}
+.btn-save{flex:1;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:var(--rsm);font-size:15px;font-weight:500;cursor:pointer;font-family:inherit}
+.btn-save:active{opacity:.85}
+.btn-clear{padding:14px 16px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:var(--rsm);font-size:14px;cursor:pointer;font-family:inherit}
+
+/* Stats */
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+.stat{background:var(--surface);border-radius:var(--rsm);border:1px solid var(--border);padding:14px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.stat-lbl{font-size:10px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.stat-lbl .zh{text-transform:none;letter-spacing:0;font-weight:400;margin-left:3px}
+.stat-val{font-size:24px;font-weight:500;color:var(--text)}
+.stat-sub{font-size:11px;color:var(--text3);margin-top:2px}
+
+/* Filter */
+.filter-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.fbtn{padding:6px 12px;border-radius:16px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--surface);color:var(--text2);font-family:inherit;transition:all .15s}
+.fbtn.on{background:var(--accent-lt);color:var(--accent);border-color:var(--accent);font-weight:500}
+.rfbtn{padding:6px 10px;border-radius:8px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--surface);color:var(--text2);font-family:inherit;margin-left:auto}
+
+/* Entries */
+.entry{background:var(--surface);border-radius:var(--rsm);border:1px solid var(--border);padding:13px 14px;display:flex;gap:11px;align-items:flex-start;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.eicon{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.ebody{flex:1;min-width:0}
+.eheader{display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap}
+.etype{font-size:13px;font-weight:500;color:var(--text)}
+.etime{font-size:11px;color:var(--text3)}
+.ecarer{font-size:11px;background:var(--surface2);color:var(--text2);padding:2px 8px;border-radius:8px}
+.edetail{font-size:13px;color:var(--text2);margin-bottom:2px}
+.enotes{font-size:13px;color:var(--text);line-height:1.5}
+.edel{background:none;border:none;color:var(--text3);cursor:pointer;font-size:20px;padding:0;line-height:1;flex-shrink:0;opacity:.5}
+.edel:hover{opacity:1}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text3);font-size:14px;line-height:2}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:999;pointer-events:none;white-space:nowrap;opacity:0;transition:opacity .25s}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="header-top">
+      <div class="app-title">宝宝日志 · Baby Log</div>
+      <div class="sync-badge">
+        <span class="sync-dot" id="sdot"></span>
+        <span id="slbl">Loading...</span>
+      </div>
+    </div>
+    <div class="header-sub">Formula · Sleep · Diaper · Notes &nbsp;|&nbsp; 配方奶 · 睡眠 · 尿布 · 备注</div>
+    <div class="tabs">
+      <button class="tab active" id="tab-log" onclick="switchTab('log')">
+        Log · 记录 <small>Add entry · 添加</small>
+      </button>
+      <button class="tab" id="tab-hist" onclick="switchTab('hist')">
+        History · 历史 <small>View all · 查看</small>
+      </button>
+      <button class="tab" id="tab-set" onclick="switchTab('set')" style="flex:0 0 44px;font-size:18px;padding:10px 0;">&#9881;</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- LOG -->
+    <div id="panel-log">
+      <div class="card">
+        <div class="sec-label">Activity type · 活动类型</div>
+        <div class="type-grid">
+          <button class="type-btn active" data-t="feed" onclick="selType('feed')">
+            <span class="type-icon">🍼</span>
+            <span><span class="type-en">Feeding</span><span class="type-zh">喂奶</span></span>
+          </button>
+          <button class="type-btn" data-t="sleep" onclick="selType('sleep')">
+            <span class="type-icon">🌙</span>
+            <span><span class="type-en">Sleep</span><span class="type-zh">睡眠</span></span>
+          </button>
+          <button class="type-btn" data-t="diaper" onclick="selType('diaper')">
+            <span class="type-icon">🌿</span>
+            <span><span class="type-en">Diaper</span><span class="type-zh">换尿布</span></span>
+          </button>
+          <button class="type-btn" data-t="note" onclick="selType('note')">
+            <span class="type-icon">📝</span>
+            <span><span class="type-en">Note</span><span class="type-zh">备注</span></span>
+          </button>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <div class="flbl">Caregiver · <span>照顾者</span></div>
+            <select id="carer">
+              <option value="Mom">Mom · 妈妈</option>
+              <option value="Dad">Dad · 爸爸</option>
+              <option value="Nanny">Nanny · 保姆</option>
+              <option value="Other">Other · 其他</option>
+            </select>
+          </div>
+          <div class="field" style="flex:0 0 105px">
+            <div class="flbl">Time · <span>时间</span></div>
+            <input type="text" id="etime" placeholder="HH:MM">
+          </div>
+        </div>
+
+        <!-- Feed -->
+        <div id="ff-feed">
+          <div class="field-row">
+            <div class="field">
+              <div class="flbl">Milk prepared · <span>准备了多少毫升</span></div>
+              <input type="number" id="f-prepared" placeholder="e.g. 90 ml" min="0" max="500" step="5">
+            </div>
+            <div class="field">
+              <div class="flbl">Milk left · <span>剩余毫升</span></div>
+              <input type="number" id="f-left" placeholder="e.g. 10 ml" min="0" max="500" step="5">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <div class="flbl">Brand · <span>品牌</span></div>
+              <input type="text" id="f-brand" placeholder="e.g. Similac">
+            </div>
+          </div>
+        </div>
+
+        <!-- Sleep -->
+        <div id="ff-sleep" style="display:none">
+          <div class="field-row">
+            <div class="field">
+              <div class="flbl">Sleep start · <span>开始时间</span></div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="time" id="s-start" style="flex:1">
+                <button onclick="setNow('s-start')" style="padding:9px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);font-size:11px;cursor:pointer;white-space:nowrap;font-family:inherit;color:var(--text2);">Now · 现在</button>
+              </div>
+            </div>
+            <div class="field">
+              <div class="flbl">Sleep end · <span>结束时间</span></div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="time" id="s-end" style="flex:1">
+                <button onclick="setNow('s-end')" style="padding:9px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);font-size:11px;cursor:pointer;white-space:nowrap;font-family:inherit;color:var(--text2);">Now · 现在</button>
+              </div>
+            </div>
+          </div>
+          <div id="sleep-calc" style="font-size:13px;color:var(--accent);font-weight:500;margin-bottom:10px;min-height:20px;"></div>
+          <div class="field-row">
+            <div class="field">
+              <div class="flbl">Location · <span>地点</span></div>
+              <select id="s-loc">
+                <option>Bassinet · 婴儿篮</option>
+                <option>Crib · 婴儿床</option>
+                <option>Arms · 抱着</option>
+                <option>Carrier · 背带</option>
+                <option>Stroller · 推车</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Diaper -->
+        <div id="ff-diaper" style="display:none">
+          <div class="field-row">
+            <div class="field" style="flex:0 0 120px">
+              <div class="flbl">Type · <span>类型</span></div>
+              <select id="d-type">
+                <option>Wet · 湿</option>
+                <option>Soiled · 大便</option>
+                <option>Both · 都有</option>
+                <option>Dry · 干净</option>
+              </select>
+            </div>
+            <div class="field">
+              <div class="flbl">Color · <span>颜色</span></div>
+              <input type="text" id="d-color" placeholder="e.g. yellow · 黄色">
+            </div>
+          </div>
+        </div>
+
+        <!-- Voice -->
+        <div class="sec-label">Voice note · 语音备注</div>
+        <div class="voice-box">
+          <div class="voice-hint">
+            Tap Record and speak — transcribed automatically by your device.<br>
+            <span class="zh">点击录音，对着手机说话，设备自动转录文字。</span>
+          </div>
+          <div class="voice-ctrl">
+            <button class="rbtn go" id="rbtn-start" onclick="startRec()">
+              <span class="rdot" id="rdot"></span> Record · 录音
+            </button>
+            <button class="rbtn stop" id="rbtn-stop" style="display:none" onclick="stopRec()">
+              Stop · 停止
+            </button>
+            <span class="rtimer" id="rtimer" style="display:none">0:00</span>
+            <span class="rstatus" id="rstatus"></span>
+          </div>
+          <div class="voice-live" id="voice-live"></div>
+          <div class="wechat-warn" id="wechat-warn">
+            ⚠️ WeChat browser blocks voice. Tap ··· → Open in Browser.<br>
+            微信浏览器不支持录音，请点右上角 ··· → 在浏览器中打开。
+          </div>
+          <div class="unsupported-warn" id="unsupported-warn">
+            ⚠️ Voice not supported in this browser. Please use Chrome or Safari.<br>
+            此浏览器不支持语音，请使用 Chrome 或 Safari。
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="flbl">Notes · <span>备注</span></div>
+          <textarea id="notes" placeholder="Observations... · 观察记录..."></textarea>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn-clear" onclick="clearForm()">Clear · 清除</button>
+          <button class="btn-save" onclick="saveEntry()">Save & Sync · 保存同步</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY -->
+    <div id="panel-hist" style="display:none">
+      <div class="stats-grid">
+        <div class="stat"><div class="stat-lbl">Formula <span class="zh">配方奶</span></div><div class="stat-val" id="st-ml">0ml</div><div class="stat-sub">consumed today · 今天</div></div>
+        <div class="stat"><div class="stat-lbl">Sleep <span class="zh">睡眠</span></div><div class="stat-val" id="st-sleep">0m</div><div class="stat-sub">today · 今天</div></div>
+        <div class="stat"><div class="stat-lbl">Diapers <span class="zh">换尿布</span></div><div class="stat-val" id="st-diapers">0</div><div class="stat-sub">today · 今天</div></div>
+      </div>
+      <div class="filter-row">
+        <button class="fbtn on" onclick="setFilter('all',this)">All · 全部</button>
+        <button class="fbtn" onclick="setFilter('feed',this)">🍼</button>
+        <button class="fbtn" onclick="setFilter('sleep',this)">🌙</button>
+        <button class="fbtn" onclick="setFilter('diaper',this)">🌿</button>
+        <button class="fbtn" onclick="setFilter('note',this)">📝</button>
+        <button class="rfbtn" onclick="loadData(false)">↻ Refresh</button>
+      </div>
+      <div id="log-list"></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="panel-set" style="display:none">
+      <div class="card">
+        <div class="sec-label">Real-time sync · 实时同步</div>
+        <p style="font-size:13px;color:#6B6960;line-height:1.7;margin-bottom:14px;">
+          Paste your Firebase Database URL below to sync across all devices instantly.<br>
+          <span style="font-size:12px;color:#A09D96;">将 Firebase 数据库网址粘贴到下方，即可在所有设备间实时同步。</span>
+        </p>
+        <div class="field" style="margin-bottom:14px;">
+          <div class="flbl">Firebase URL</div>
+          <input type="text" id="fb-url" placeholder="https://your-project-default-rtdb.firebaseio.com" style="font-size:12px;">
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button class="btn-save" onclick="saveFirebaseUrl()" style="font-size:14px;padding:12px;">Save &amp; Connect · 保存连接</button>
+          <button class="btn-clear" onclick="clearFirebaseUrl()">Clear · 清除</button>
+        </div>
+        <div id="fb-status" style="font-size:13px;color:#6B6960;line-height:1.6;"></div>
+      </div>
+
+      <div class="card">
+        <div class="sec-label">How to get Firebase URL · 如何获取</div>
+        <ol style="font-size:13px;color:#6B6960;line-height:2;padding-left:18px;">
+          <li>Go to <strong>firebase.google.com</strong> · 前往 Firebase 网站</li>
+          <li>Sign in → Add project → name it <strong>baby-tracker</strong></li>
+          <li>Click <strong>Build → Realtime Database</strong></li>
+          <li>Create Database → Test mode → Enable</li>
+          <li>Copy the URL shown at the top (ends in <em>.firebaseio.com</em>)</li>
+          <li>Paste it above and tap Save · 粘贴到上方并保存</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SKEY = 'babylog_shared_v4';
+const POLL_MS = 5000;
+
+let entries = [];
+let activeType = 'feed';
+let filter = 'all';
+let recognition = null;
+let isRecording = false;
+let timerInt = null;
+let recSecs = 0;
+let liveTranscript = '';
+let finalTranscript = '';
+let pollInterval = null;
+
+const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+// ─── Firebase helpers ──────────────────────────────────────────────────────
+function getFirebaseUrl() {
+  return localStorage.getItem('fb_url_v1') || '';
+}
+
+function saveFirebaseUrl() {
+  const url = document.getElementById('fb-url').value.trim().replace(/\/+$/, '');
+  if (!url || !url.includes('firebaseio.com')) {
+    showFbStatus('Please enter a valid Firebase URL · 请输入正确的 Firebase 网址', 'red');
+    return;
+  }
+  localStorage.setItem('fb_url_v1', url);
+  document.getElementById('fb-url').value = url;
+  showFbStatus('Connected! Loading data... · 已连接，正在加载数据...', 'green');
+  restartPoll();
+  loadData(false);
+}
+
+function clearFirebaseUrl() {
+  localStorage.removeItem('fb_url_v1');
+  document.getElementById('fb-url').value = '';
+  showFbStatus('Cleared. Using local storage only. · 已清除，仅使用本地存储。', '');
+  restartPoll();
+}
+
+function showFbStatus(msg, color) {
+  const el = document.getElementById('fb-status');
+  if (el) { el.textContent = msg; el.style.color = color === 'red' ? '#C0392B' : color === 'green' ? '#2D5A3D' : '#6B6960'; }
+}
+
+function restartPoll() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(() => loadData(true), POLL_MS);
+}
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+window.onload = () => {
+  document.getElementById('etime').placeholder = nowHH();
+  if (isWeChat) document.getElementById('wechat-warn').style.display = 'block';
+  else if (!SpeechRecognition) document.getElementById('unsupported-warn').style.display = 'block';
+  // Pre-fill saved Firebase URL in settings
+  const saved = getFirebaseUrl();
+  if (saved) {
+    document.getElementById('fb-url').value = saved;
+    showFbStatus('Connected · 已连接 ' + saved.split('/')[2], 'green');
+  }
+  loadData(false);
+  restartPoll();
+};
+
+// ─── Sync ──────────────────────────────────────────────────────────────────
+async function loadData(quiet) {
+  if (!quiet) setSyncState('busy');
+  const fbUrl = getFirebaseUrl();
+  if (fbUrl) {
+    // Firebase sync
+    try {
+      const resp = await fetch(fbUrl + '/entries.json');
+      if (!resp.ok) throw new Error('fetch failed');
+      const data = await resp.json();
+      const loaded = data ? Object.values(data).sort((a,b) => new Date(b.time) - new Date(a.time)) : [];
+      if (JSON.stringify(loaded) !== JSON.stringify(entries)) {
+        entries = loaded;
+        if (document.getElementById('panel-hist').style.display !== 'none') renderLog();
+      }
+      setSyncState('ok');
+    } catch(e) {
+      setSyncState('err');
+    }
+  } else {
+    // localStorage fallback
+    try {
+      const raw = localStorage.getItem(SKEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (JSON.stringify(parsed) !== JSON.stringify(entries)) {
+          entries = parsed;
+          if (document.getElementById('panel-hist').style.display !== 'none') renderLog();
+        }
+      }
+      setSyncState('ok');
+    } catch(e) { setSyncState('err'); }
+  }
+}
+
+async function persist() {
+  const fbUrl = getFirebaseUrl();
+  if (fbUrl) {
+    // Write all entries to Firebase
+    setSyncState('busy');
+    try {
+      // Store as object keyed by id for easy merge
+      const obj = {};
+      entries.forEach(e => { obj['e' + e.id] = e; });
+      const resp = await fetch(fbUrl + '/entries.json', {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(obj)
+      });
+      if (!resp.ok) throw new Error('write failed');
+      setSyncState('ok');
+    } catch(e) {
+      setSyncState('err');
+      toast('Sync failed · 同步失败');
+    }
+  } else {
+    // localStorage fallback
+    try {
+      localStorage.setItem(SKEY, JSON.stringify(entries));
+      setSyncState('ok');
+    } catch(e) { setSyncState('err'); }
+  }
+}
+
+// Listen for changes from other tabs on same device
+window.addEventListener('storage', e => {
+  if (e.key === SKEY || e.key === 'fb_url_v1') loadData(true);
+});
+
+function setSyncState(s) {
+  const dot = document.getElementById('sdot');
+  const lbl = document.getElementById('slbl');
+  dot.className = 'sync-dot' + (s==='busy'?' busy':s==='err'?' err':'');
+  if (s==='ok') { const n=new Date(); lbl.textContent=`Synced ${n.getHours().toString().padStart(2,'0')}:${n.getMinutes().toString().padStart(2,'0')}`; }
+  else if (s==='busy') lbl.textContent='Syncing...';
+  else lbl.textContent='Sync error';
+}
+
+// ─── Tab / type ────────────────────────────────────────────────────────────
+function switchTab(t) {
+  ['log','hist','set'].forEach(p => {
+    const panel = document.getElementById('panel-'+p);
+    if (panel) panel.style.display = t===p?'block':'none';
+    const tab = document.getElementById('tab-'+p);
+    if (tab) tab.classList.toggle('active', t===p);
+  });
+  if (t==='hist') { loadData(false); renderLog(); }
+}
+
+function selType(type) {
+  activeType = type;
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.toggle('active', b.dataset.t===type));
+  ['feed','sleep','diaper'].forEach(t => {
+    const el = document.getElementById('ff-'+t);
+    if (el) el.style.display = t===type?'block':'none';
+  });
+  // Wire up live duration calc when sleep is selected
+  if (type==='sleep') {
+    const ss=document.getElementById('s-start'), se=document.getElementById('s-end');
+    if (ss) ss.oninput = calcSleepDuration;
+    if (se) se.oninput = calcSleepDuration;
+  }
+}
+
+// ─── Form ──────────────────────────────────────────────────────────────────
+function setNow(fieldId) {
+  const n = new Date();
+  const hh = n.getHours().toString().padStart(2,'0');
+  const mm = n.getMinutes().toString().padStart(2,'0');
+  document.getElementById(fieldId).value = hh+':'+mm;
+  calcSleepDuration();
+}
+
+function calcSleepDuration() {
+  const startEl = document.getElementById('s-start');
+  const endEl   = document.getElementById('s-end');
+  const calcEl  = document.getElementById('sleep-calc');
+  if (!startEl || !endEl || !calcEl) return 0;
+  const sv = startEl.value, ev = endEl.value;
+  if (!sv || !ev) { calcEl.textContent=''; return 0; }
+  const [sh,sm] = sv.split(':').map(Number);
+  const [eh,em] = ev.split(':').map(Number);
+  let totalMin = (eh*60+em) - (sh*60+sm);
+  if (totalMin < 0) totalMin += 24*60; // crossed midnight
+  const h = Math.floor(totalMin/60), m = totalMin%60;
+  calcEl.textContent = '⏱ ' + (h>0?h+'h ':'') + m+'m slept · 睡了' + (h>0?h+'小时':'') + (m>0?m+'分钟':'');
+  return totalMin;
+}
+
+function nowHH() {
+  const n=new Date();
+  return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');
+}
+
+function resolveTime() {
+  const t=document.getElementById('etime').value.trim();
+  if (!t) return new Date().toISOString();
+  const p=t.split(':');
+  if (p.length===2) { const d=new Date(); d.setHours(+p[0]||0,+p[1]||0,0,0); return d.toISOString(); }
+  return new Date().toISOString();
+}
+
+function getDetail() {
+  if (activeType==='feed') {
+    const prepared=parseInt(document.getElementById('f-prepared').value)||0;
+    const left=parseInt(document.getElementById('f-left').value)||0;
+    const consumed=prepared>0?(prepared-left):0;
+    const brand=document.getElementById('f-brand').value;
+    let d=prepared?`Prepared ${prepared}ml`:'Formula feeding';
+    if (prepared>0) d+=` · Drank ${consumed}ml`;
+    if (left>0) d+=` · Left ${left}ml`;
+    if (brand) d+=' · '+brand;
+    return d;
+  }
+  if (activeType==='sleep') {
+    const totalMin = calcSleepDuration();
+    const loc = document.getElementById('s-loc').value.split(' · ')[0];
+    const h=Math.floor(totalMin/60), m=totalMin%60;
+    const durStr = totalMin>0?((h>0?h+'h ':'')+(m>0?m+'m':'').trim()):'';
+    return loc+(durStr?' · '+durStr:'');
+  }
+  if (activeType==='diaper') {
+    const tp=document.getElementById('d-type').value.split(' · ')[0];
+    const col=document.getElementById('d-color').value;
+    return tp+(col?' · '+col:'');
+  }
+  return '';
+}
+
+function saveEntry() {
+  const n=document.getElementById('notes').value.trim();
+  const sleepDurMin = activeType==='sleep' ? calcSleepDuration() : 0;
+  const sleepStart  = activeType==='sleep' ? (document.getElementById('s-start').value||'') : '';
+  const sleepEnd    = activeType==='sleep' ? (document.getElementById('s-end').value||'') : '';
+  const prepared = activeType==='feed'?(parseInt(document.getElementById('f-prepared').value)||0):0;
+  const left     = activeType==='feed'?(parseInt(document.getElementById('f-left').value)||0):0;
+  const consumed = prepared>0?(prepared-left):0;
+  const entry = {
+    id: Date.now(),
+    type: activeType,
+    caregiver: document.getElementById('carer').value.split(' · ')[0],
+    time: resolveTime(),
+    detail: getDetail(),
+    ml: consumed,
+    ml_prepared: prepared,
+    ml_left: left,
+    duration_min: sleepDurMin,
+    sleep_start: sleepStart,
+    sleep_end: sleepEnd,
+    notes: n
+  };
+  entries.unshift(entry);
+  persist();
+  clearForm();
+  toast('Saved · 已保存 ✓');
+}
+
+function clearForm() {
+  ['f-prepared','f-left','f-brand','s-start','s-end','d-color','etime','notes'].forEach(id => {
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('etime').placeholder=nowHH();
+  const sc=document.getElementById('sleep-calc'); if(sc) sc.textContent='';
+  liveTranscript=''; finalTranscript='';
+  document.getElementById('voice-live').textContent='';
+}
+
+// ─── Voice (Web Speech API — no API key, built into browser) ──────────────
+function startRec() {
+  if (isWeChat) { toast('Open in browser · 请在浏览器中打开'); return; }
+  if (!SpeechRecognition) { toast('Use Chrome or Safari · 请用Chrome或Safari'); return; }
+
+  liveTranscript=''; finalTranscript='';
+  document.getElementById('voice-live').textContent='';
+
+  recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  // Detect language preference — default to Chinese + English
+  recognition.lang = 'zh-CN';
+
+  recognition.onstart = () => {
+    isRecording=true;
+    document.getElementById('rbtn-start').style.display='none';
+    document.getElementById('rbtn-stop').style.display='flex';
+    document.getElementById('rtimer').style.display='inline';
+    document.getElementById('rdot').classList.add('on');
+    document.getElementById('rstatus').textContent='Listening... · 正在聆听...';
+    recSecs=0;
+    timerInt=setInterval(()=>{
+      recSecs++;
+      const m=Math.floor(recSecs/60), s=(recSecs%60).toString().padStart(2,'0');
+      document.getElementById('rtimer').textContent=m+':'+s;
+    },1000);
+  };
+
+  recognition.onresult = (e) => {
+    let interim='';
+    for (let i=e.resultIndex;i<e.results.length;i++) {
+      const t=e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalTranscript+=t+' ';
+      else interim+=t;
+    }
+    document.getElementById('voice-live').textContent=(finalTranscript+interim).trim();
+  };
+
+  recognition.onerror = (e) => {
+    const msgs = {
+      'not-allowed':'Mic denied · 麦克风权限被拒绝',
+      'no-speech':'No speech detected · 未检测到语音',
+      'network':'Network error · 网络错误',
+    };
+    toast(msgs[e.error]||'Error: '+e.error);
+    stopRec();
+  };
+
+  recognition.onend = () => {
+    if (isRecording) recognition.start(); // keep going until user taps stop
+  };
+
+  try { recognition.start(); } catch(e) { toast('Could not start mic · 无法启动麦克风'); }
+}
+
+function stopRec() {
+  isRecording=false;
+  clearInterval(timerInt);
+  if (recognition) { recognition.onend=null; recognition.stop(); }
+  document.getElementById('rbtn-stop').style.display='none';
+  document.getElementById('rbtn-start').style.display='flex';
+  document.getElementById('rtimer').style.display='none';
+  document.getElementById('rdot').classList.remove('on');
+  document.getElementById('rstatus').textContent='';
+
+  const text=(finalTranscript||document.getElementById('voice-live').textContent||'').trim();
+  if (text) {
+    document.getElementById('voice-live').textContent='';
+    parseAndFill(text);
+  }
+}
+
+// Chinese number words → digits
+function zhNum(s) {
+  const map={'零':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,
+             '两':2,'十':10,'百':100,'千':1000};
+  // Try direct digit parse first
+  const n = parseFloat(s);
+  if (!isNaN(n)) return n;
+  // Simple Chinese number parse (handles 一百二十, 五十, etc.)
+  let result=0, cur=0;
+  for (const ch of s) {
+    const v=map[ch];
+    if (v===undefined) continue;
+    if (v>=10) { result+=(cur||1)*v; cur=0; }
+    else cur=v;
+  }
+  return result+cur || null;
+}
+
+function parseAndFill(text) {
+  const t = text;
+  const p = {};
+
+  // ── Activity type detection ──────────────────────────────────────────
+  const feedKw  = /feed|fed|milk|formula|bottle|喂|奶|毫升|ml/i;
+  const sleepKw = /sleep|slept|nap|asleep|睡|眠/i;
+  const diaperKw= /diaper|poop|pee|wet|soiled|换|尿布|拉|大便|小便/i;
+  if (diaperKw.test(t))      p.type='diaper';
+  else if (sleepKw.test(t))  p.type='sleep';
+  else if (feedKw.test(t))   p.type='feed';
+
+  // ── ML amounts — prepared and left ──────────────────────────────────
+  // Find all ml numbers in text
+  const mlPattern = /(\d+(?:\.\d+)?|[一二三四五六七八九十百两]+)\s*(?:ml|毫升|cc|mL)/gi;
+  const allMl = [];
+  let mlM;
+  while ((mlM=mlPattern.exec(t))!==null) {
+    const v=zhNum(mlM[1]); if(v&&v>0) allMl.push({val:v, idx:mlM.index, raw:mlM[0]});
+  }
+  // For each ml number, grab the 25 chars BEFORE it to find its label
+  function labelBefore(idx) { return t.slice(Math.max(0,idx-25), idx).toLowerCase(); }
+  const leftKw    = /left|remain|剩|余|没喝完|剩余/;
+  const prepKw    = /prepar|prepared|made|冲|准备|冲了|冲好/;
+
+  if (allMl.length>=2) {
+    // Score each number: does the text before it say "prepared" or "left"?
+    let prepIdx=-1, leftIdx2=-1;
+    allMl.forEach((m,i)=>{
+      const before = labelBefore(m.idx);
+      if (prepKw.test(before)) prepIdx=i;
+      if (leftKw.test(before))  leftIdx2=i;
+    });
+    if (prepIdx>=0 && leftIdx2>=0 && prepIdx!==leftIdx2) {
+      p.ml_prepared = allMl[prepIdx].val;
+      p.ml_left     = allMl[leftIdx2].val;
+    } else if (leftIdx2>=0) {
+      // Only "left" keyword found — the other number is prepared
+      p.ml_left     = allMl[leftIdx2].val;
+      p.ml_prepared = allMl[leftIdx2===0?1:0].val;
+    } else if (prepIdx>=0) {
+      // Only "prepared" keyword found — the other number is left
+      p.ml_prepared = allMl[prepIdx].val;
+      p.ml_left     = allMl[prepIdx===0?1:0].val;
+    } else {
+      // No keywords — assume first = prepared, second = left (natural speech order)
+      p.ml_prepared = allMl[0].val;
+      p.ml_left     = allMl[1].val;
+    }
+    p.ml = Math.max(0, p.ml_prepared - p.ml_left);
+    p.type = p.type || 'feed';
+  } else if (allMl.length===1) {
+    const before = labelBefore(allMl[0].idx);
+    if (leftKw.test(before)) {
+      p.ml_left = allMl[0].val;
+    } else {
+      p.ml_prepared = allMl[0].val;
+    }
+    p.ml = allMl[0].val;
+    p.type = p.type || 'feed';
+  }
+
+  // ── Sleep duration ───────────────────────────────────────────────────
+  // handles: "2 hours", "1.5 hours", "1 hour 30 minutes", "90 minutes"
+  //          "两个小时", "一个半小时", "1个半小时", "九十分钟", "120分钟"
+  //          个 is a Chinese counter word and must be allowed between number and 小时
+  {
+    let totalMin = 0;
+
+    // Match pattern: [number][个?][半?]小时 — e.g. 1个半小时, 两个小时, 1.5小时
+    // Captures the number part before 个/半/小时
+    const hrM = t.match(/(\d+(?:\.\d+)?|[一两二三四五六七八九十百]+)\s*个?\s*半?\s*(?:hour|hr|小时|钟头)/i);
+    if (hrM) {
+      let hv = parseFloat(hrM[1]);
+      if (isNaN(hv)) hv = zhNum(hrM[1]) || 0;
+      // Check if "半" appears between the number and 小时 — adds 0.5 hours
+      const segment = t.slice(hrM.index, hrM.index + hrM[0].length);
+      if (/半/.test(segment)) hv = Math.floor(hv) + 0.5;
+      totalMin += hv * 60;
+    }
+
+    // Also check standalone 半小时 (without a leading number) = 30 min
+    // but only if no hours were already found (avoid double-counting)
+    if (totalMin === 0 && /半小时/.test(t)) totalMin = 30;
+
+    // Minutes (standalone, or added after hours)
+    const minM = t.match(/(\d+(?:\.\d+)?|[一两二三四五六七八九十百]+)\s*(?:min|minute|分钟|分(?!之))/i);
+    if (minM) {
+      let mv = parseFloat(minM[1]);
+      if (isNaN(mv)) mv = zhNum(minM[1]) || 0;
+      // Don't double-count if this minute number is part of "X小时Y分" pattern
+      // by checking it's not the same position as what hrM already consumed
+      totalMin += mv;
+    }
+
+    // Pure number after sleep keyword e.g. "slept 90"
+    if (totalMin === 0) {
+      const pureMin = t.match(/(?:slept?|睡了?|睡了约?)\s*(\d+)(?!\s*(?:hour|hr|小时|个))/i);
+      if (pureMin) totalMin = parseInt(pureMin[1]);
+    }
+
+    totalMin = Math.round(totalMin);
+    if (totalMin > 0) { p.duration_min = totalMin; p.type = p.type || 'sleep'; }
+  }
+
+  // ── Finished / refused ───────────────────────────────────────────────
+  if (/全部|all done|finish|喝完|全喝/i.test(t))  p.finished='yes';
+  if (/partial|一部分|没喝完|没有喝完/i.test(t))  p.finished='partial';
+  if (/refus|不喝|拒绝/i.test(t))                 p.finished='refused';
+
+  // ── Sleep location ───────────────────────────────────────────────────
+  if (/bassinet|婴儿篮/i.test(t))    p.sleep_location='Bassinet';
+  else if (/crib|婴儿床/i.test(t))   p.sleep_location='Crib';
+  else if (/carrier|背带/i.test(t))  p.sleep_location='Carrier';
+  else if (/stroller|推车/i.test(t)) p.sleep_location='Stroller';
+  else if (/arm|抱/i.test(t))        p.sleep_location='Arms';
+
+  // ── Diaper type ──────────────────────────────────────────────────────
+  const hasPee  = /wet|pee|小便|尿|湿/i.test(t);
+  const hasPoop = /poop|soil|大便|拉|便便/i.test(t);
+  if (hasPee && hasPoop)   p.diaper_type='Both';
+  else if (hasPoop)        p.diaper_type='Soiled';
+  else if (hasPee)         p.diaper_type='Wet';
+
+  // ── Time mentions ───────────────────────────────────────────────────
+  const allTimes = [...t.matchAll(/\b(\d{1,2}):(\d{2})\b/g)].map(m=>m[0]);
+  if (allTimes.length>=2 && p.type==='sleep') {
+    p.sleep_start=allTimes[0]; p.sleep_end=allTimes[1];
+  } else if (allTimes.length===1) {
+    p.time=allTimes[0];
+  }
+
+  // Always store full transcript in notes
+  p.notes = t;
+
+  applyParsed(p, t);
+}
+
+function applyParsed(p, rawText) {
+  if (p.type && ['feed','sleep','diaper','note'].includes(p.type)) selType(p.type);
+
+  if (p.ml_prepared) document.getElementById('f-prepared').value = p.ml_prepared;
+  if (p.ml_left !== undefined && p.ml_left >= 0) document.getElementById('f-left').value = p.ml_left;
+  // fallback: if only 'ml' parsed (consumed), put it as prepared
+  if (!p.ml_prepared && p.ml) document.getElementById('f-prepared').value = p.ml;
+  if (p.brand) document.getElementById('f-brand').value = p.brand;
+
+  if (p.sleep_start) document.getElementById('s-start').value = p.sleep_start;
+  if (p.sleep_end)   document.getElementById('s-end').value   = p.sleep_end;
+  if (p.duration_min && !p.sleep_start && !p.sleep_end) {
+    // No explicit times — pre-fill end=now, start=now-duration
+    const now=new Date(), endMin=now.getHours()*60+now.getMinutes();
+    const startMin=((endMin-p.duration_min)+1440)%1440;
+    const fmtT=m=>Math.floor(m/60).toString().padStart(2,'0')+':'+(m%60).toString().padStart(2,'0');
+    document.getElementById('s-start').value=fmtT(startMin);
+    document.getElementById('s-end').value=fmtT(endMin);
+  }
+  calcSleepDuration();
+  if (p.sleep_location) {
+    const sel = document.getElementById('s-loc');
+    [...sel.options].forEach(o => { if (o.value.startsWith(p.sleep_location)) sel.value=o.value; });
+  }
+
+  if (p.diaper_type) {
+    const sel = document.getElementById('d-type');
+    [...sel.options].forEach(o => { if (o.value.startsWith(p.diaper_type)) sel.value=o.value; });
+  }
+  if (p.diaper_color) document.getElementById('d-color').value = p.diaper_color;
+  if (p.time) document.getElementById('etime').value = p.time;
+
+  // Put full transcript in notes
+  const notesEl = document.getElementById('notes');
+  notesEl.value = (notesEl.value ? notesEl.value+'\n' : '') + rawText;
+
+  const filled = [p.ml&&`${p.ml}ml`, p.duration_min&&`${p.duration_min}min`, p.diaper_type].filter(Boolean);
+  toast(filled.length ? `Auto-filled: ${filled.join(', ')} ✓` : 'Transcribed · 转录完成 ✓');
+}
+
+// ─── History ───────────────────────────────────────────────────────────────
+const TYPES={
+  feed:  {en:'Feeding',zh:'喂奶',icon:'🍼',bg:'#E6F1FB'},
+  sleep: {en:'Sleep',zh:'睡眠',icon:'🌙',bg:'#EEEDFE'},
+  diaper:{en:'Diaper',zh:'换尿布',icon:'🌿',bg:'#EAF3DE'},
+  note:  {en:'Note',zh:'备注',icon:'📝',bg:'#FAEEDA'},
+};
+
+function setFilter(f,btn) {
+  filter=f;
+  document.querySelectorAll('.fbtn').forEach(b=>b.classList.toggle('on',b===btn));
+  renderLog();
+}
+
+function fmtTime(iso) {
+  const d=new Date(iso);
+  const h=d.getHours().toString().padStart(2,'0'), m=d.getMinutes().toString().padStart(2,'0');
+  const today=new Date();
+  if (d.toDateString()===today.toDateString()) return 'Today '+h+':'+m;
+  const y=new Date(today); y.setDate(today.getDate()-1);
+  if (d.toDateString()===y.toDateString()) return 'Yest. '+h+':'+m;
+  return d.getDate()+'/'+(d.getMonth()+1)+' '+h+':'+m;
+}
+
+function fmtSleep(m) {
+  m=Math.round(parseFloat(m))||0;
+  if (m<=0) return '—';
+  if (m>=60) {
+    const h=Math.floor(m/60), rem=m%60;
+    return rem>0 ? h+'h '+rem+'m' : h+'h';
+  }
+  return m+'m';
+}
+
+function renderLog() {
+  const today=new Date().toDateString();
+  const tod=entries.filter(e=>new Date(e.time).toDateString()===today);
+  const todF=tod.filter(e=>e.type==='feed');
+  const todMlConsumed=todF.reduce((s,e)=>s+(e.ml||0),0);
+  const todMlPrepared=todF.reduce((s,e)=>s+(e.ml_prepared||e.ml||0),0);
+  const todSleepMin=tod.filter(e=>e.type==='sleep').reduce((s,e)=>s+(e.duration_min||0),0);
+  document.getElementById('st-ml').textContent=todMlConsumed+'ml';
+  document.getElementById('st-sleep').textContent=fmtSleep(todSleepMin);
+  document.getElementById('st-diapers').textContent=tod.filter(e=>e.type==='diaper').length;
+
+  const shown=filter==='all'?entries:entries.filter(e=>e.type===filter);
+  const list=document.getElementById('log-list');
+  if (!shown.length) {
+    list.innerHTML='<div class="empty-state">No entries yet · 暂无记录<br><small>Switch to Log tab · 切换到记录标签</small></div>';
+    return;
+  }
+  list.innerHTML=shown.map(e=>{
+    const T=TYPES[e.type]||TYPES.note;
+    // Build smart detail line for feed
+    let detailLine = e.detail || '';
+    if (e.type==='feed') {
+      const consumed = e.ml || 0;
+      const prepared = e.ml_prepared || consumed;
+      const left = e.ml_left != null ? e.ml_left : (prepared - consumed);
+      const parts = [];
+      if (prepared) parts.push(`Prepared ${prepared}ml`);
+      if (consumed) parts.push(`Drank ${consumed}ml`);
+      if (left > 0)  parts.push(`Left ${left}ml`);
+      if (e.ml_brand || (e.detail && e.detail.includes('·'))) {
+        const brand = e.detail ? e.detail.split('·').slice(-1)[0].trim() : '';
+        if (brand && !brand.includes('ml') && !brand.includes('Prepared') && !brand.includes('Drank')) parts.push(brand);
+      }
+      detailLine = parts.join(' · ');
+    }
+    if (e.type==='sleep') {
+      const loc = e.detail ? e.detail.split(' · ')[0] : '';
+      const dur = e.duration_min ? fmtSleep(e.duration_min) : '';
+      const times = (e.sleep_start && e.sleep_end) ? e.sleep_start+' → '+e.sleep_end : '';
+      const parts = [loc, times, dur].filter(Boolean);
+      detailLine = parts.join(' · ');
+    }
+    const carerBadge = e.caregiver ? `<span class="ecarer">${e.caregiver}</span>` : '';
+    return `<div class="entry">
+      <div class="eicon" style="background:${T.bg}">${T.icon}</div>
+      <div class="ebody">
+        <div class="eheader">
+          <span class="etype">${T.en} · ${T.zh}</span>
+          <span class="etime">${fmtTime(e.time)}</span>
+          ${carerBadge}
+        </div>
+        ${detailLine?`<div class="edetail">${detailLine}</div>`:''}
+        ${e.notes?`<div class="enotes">${e.notes}</div>`:''}
+      </div>
+      <button class="edel" onclick="delEntry(${e.id})">×</button>
+    </div>`;
+  }).join('');
+}
+
+function delEntry(id) {
+  entries=entries.filter(e=>e.id!==id);
+  persist();
+  renderLog();
+}
+
+// ─── Toast ─────────────────────────────────────────────────────────────────
+function toast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2400);
+}
+</script>
+</body>
+</html>
