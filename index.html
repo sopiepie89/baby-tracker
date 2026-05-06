@@ -190,14 +190,23 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         <!-- Sleep -->
         <div id="ff-sleep" style="display:none">
           <div class="field-row">
-            <div class="field" style="flex:0 0 90px">
-              <div class="flbl">Hours · <span>小时</span></div>
-              <input type="number" id="s-hr" placeholder="0" min="0" max="24">
+            <div class="field">
+              <div class="flbl">Sleep start · <span>开始时间</span></div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="time" id="s-start" style="flex:1">
+                <button onclick="setNow('s-start')" style="padding:9px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);font-size:11px;cursor:pointer;white-space:nowrap;font-family:inherit;color:var(--text2);">Now · 现在</button>
+              </div>
             </div>
-            <div class="field" style="flex:0 0 90px">
-              <div class="flbl">Minutes · <span>分钟</span></div>
-              <input type="number" id="s-min" placeholder="0" min="0" max="59">
+            <div class="field">
+              <div class="flbl">Sleep end · <span>结束时间</span></div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="time" id="s-end" style="flex:1">
+                <button onclick="setNow('s-end')" style="padding:9px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);font-size:11px;cursor:pointer;white-space:nowrap;font-family:inherit;color:var(--text2);">Now · 现在</button>
+              </div>
             </div>
+          </div>
+          <div id="sleep-calc" style="font-size:13px;color:var(--accent);font-weight:500;margin-bottom:10px;min-height:20px;"></div>
+          <div class="field-row">
             <div class="field">
               <div class="flbl">Location · <span>地点</span></div>
               <select id="s-loc">
@@ -487,9 +496,39 @@ function selType(type) {
     const el = document.getElementById('ff-'+t);
     if (el) el.style.display = t===type?'block':'none';
   });
+  // Wire up live duration calc when sleep is selected
+  if (type==='sleep') {
+    const ss=document.getElementById('s-start'), se=document.getElementById('s-end');
+    if (ss) ss.oninput = calcSleepDuration;
+    if (se) se.oninput = calcSleepDuration;
+  }
 }
 
 // ─── Form ──────────────────────────────────────────────────────────────────
+function setNow(fieldId) {
+  const n = new Date();
+  const hh = n.getHours().toString().padStart(2,'0');
+  const mm = n.getMinutes().toString().padStart(2,'0');
+  document.getElementById(fieldId).value = hh+':'+mm;
+  calcSleepDuration();
+}
+
+function calcSleepDuration() {
+  const startEl = document.getElementById('s-start');
+  const endEl   = document.getElementById('s-end');
+  const calcEl  = document.getElementById('sleep-calc');
+  if (!startEl || !endEl || !calcEl) return 0;
+  const sv = startEl.value, ev = endEl.value;
+  if (!sv || !ev) { calcEl.textContent=''; return 0; }
+  const [sh,sm] = sv.split(':').map(Number);
+  const [eh,em] = ev.split(':').map(Number);
+  let totalMin = (eh*60+em) - (sh*60+sm);
+  if (totalMin < 0) totalMin += 24*60; // crossed midnight
+  const h = Math.floor(totalMin/60), m = totalMin%60;
+  calcEl.textContent = '⏱ ' + (h>0?h+'h ':'') + m+'m slept · 睡了' + (h>0?h+'小时':'') + (m>0?m+'分钟':'');
+  return totalMin;
+}
+
 function nowHH() {
   const n=new Date();
   return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');
@@ -516,11 +555,10 @@ function getDetail() {
     return d;
   }
   if (activeType==='sleep') {
-    const hr=parseInt(document.getElementById('s-hr').value)||0;
-    const mn=parseInt(document.getElementById('s-min').value)||0;
-    const totalMin=hr*60+mn;
-    const loc=document.getElementById('s-loc').value.split(' · ')[0];
-    const durStr=hr>0?(mn>0?hr+'h '+mn+'m':hr+'h'):(mn>0?mn+'m':'');
+    const totalMin = calcSleepDuration();
+    const loc = document.getElementById('s-loc').value.split(' · ')[0];
+    const h=Math.floor(totalMin/60), m=totalMin%60;
+    const durStr = totalMin>0?((h>0?h+'h ':'')+(m>0?m+'m':'').trim()):'';
     return loc+(durStr?' · '+durStr:'');
   }
   if (activeType==='diaper') {
@@ -533,9 +571,9 @@ function getDetail() {
 
 function saveEntry() {
   const n=document.getElementById('notes').value.trim();
-  const sleepHr  = activeType==='sleep'?(parseInt(document.getElementById('s-hr').value)||0):0;
-  const sleepMin2 = activeType==='sleep'?(parseInt(document.getElementById('s-min').value)||0):0;
-  const sleepDurMin = sleepHr*60+sleepMin2;
+  const sleepDurMin = activeType==='sleep' ? calcSleepDuration() : 0;
+  const sleepStart  = activeType==='sleep' ? (document.getElementById('s-start').value||'') : '';
+  const sleepEnd    = activeType==='sleep' ? (document.getElementById('s-end').value||'') : '';
   const prepared = activeType==='feed'?(parseInt(document.getElementById('f-prepared').value)||0):0;
   const left     = activeType==='feed'?(parseInt(document.getElementById('f-left').value)||0):0;
   const consumed = prepared>0?(prepared-left):0;
@@ -549,6 +587,8 @@ function saveEntry() {
     ml_prepared: prepared,
     ml_left: left,
     duration_min: sleepDurMin,
+    sleep_start: sleepStart,
+    sleep_end: sleepEnd,
     notes: n
   };
   entries.unshift(entry);
@@ -558,10 +598,11 @@ function saveEntry() {
 }
 
 function clearForm() {
-  ['f-prepared','f-left','f-brand','s-hr','s-min','d-color','etime','notes'].forEach(id => {
+  ['f-prepared','f-left','f-brand','s-start','s-end','d-color','etime','notes'].forEach(id => {
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('etime').placeholder=nowHH();
+  const sc=document.getElementById('sleep-calc'); if(sc) sc.textContent='';
   liveTranscript=''; finalTranscript='';
   document.getElementById('voice-live').textContent='';
 }
@@ -781,9 +822,13 @@ function parseAndFill(text) {
   else if (hasPoop)        p.diaper_type='Soiled';
   else if (hasPee)         p.diaper_type='Wet';
 
-  // ── Time mention ─────────────────────────────────────────────────────
-  const timeMatch = t.match(/\b(\d{1,2}):(\d{2})\b/);
-  if (timeMatch) p.time=timeMatch[0];
+  // ── Time mentions ───────────────────────────────────────────────────
+  const allTimes = [...t.matchAll(/\b(\d{1,2}):(\d{2})\b/g)].map(m=>m[0]);
+  if (allTimes.length>=2 && p.type==='sleep') {
+    p.sleep_start=allTimes[0]; p.sleep_end=allTimes[1];
+  } else if (allTimes.length===1) {
+    p.time=allTimes[0];
+  }
 
   // Always store full transcript in notes
   p.notes = t;
@@ -800,11 +845,17 @@ function applyParsed(p, rawText) {
   if (!p.ml_prepared && p.ml) document.getElementById('f-prepared').value = p.ml;
   if (p.brand) document.getElementById('f-brand').value = p.brand;
 
-  if (p.duration_min) {
-    const ph=Math.floor(p.duration_min/60), pm=p.duration_min%60;
-    document.getElementById('s-hr').value = ph||'';
-    document.getElementById('s-min').value = pm||'';
+  if (p.sleep_start) document.getElementById('s-start').value = p.sleep_start;
+  if (p.sleep_end)   document.getElementById('s-end').value   = p.sleep_end;
+  if (p.duration_min && !p.sleep_start && !p.sleep_end) {
+    // No explicit times — pre-fill end=now, start=now-duration
+    const now=new Date(), endMin=now.getHours()*60+now.getMinutes();
+    const startMin=((endMin-p.duration_min)+1440)%1440;
+    const fmtT=m=>Math.floor(m/60).toString().padStart(2,'0')+':'+(m%60).toString().padStart(2,'0');
+    document.getElementById('s-start').value=fmtT(startMin);
+    document.getElementById('s-end').value=fmtT(endMin);
   }
+  calcSleepDuration();
   if (p.sleep_location) {
     const sel = document.getElementById('s-loc');
     [...sel.options].forEach(o => { if (o.value.startsWith(p.sleep_location)) sel.value=o.value; });
@@ -865,9 +916,7 @@ function renderLog() {
   const todF=tod.filter(e=>e.type==='feed');
   const todMlConsumed=todF.reduce((s,e)=>s+(e.ml||0),0);
   const todMlPrepared=todF.reduce((s,e)=>s+(e.ml_prepared||e.ml||0),0);
-  const todSleepMin=tod.filter(e=>e.type==='sleep').reduce((s,e)=>{
-    return s+(e.duration_min||parseInt((e.detail.match(/(\d+) min/)||[])[1])||0);
-  },0);
+  const todSleepMin=tod.filter(e=>e.type==='sleep').reduce((s,e)=>s+(e.duration_min||0),0);
   document.getElementById('st-ml').textContent=todMlConsumed+'ml';
   document.getElementById('st-sleep').textContent=fmtSleep(todSleepMin);
   document.getElementById('st-diapers').textContent=tod.filter(e=>e.type==='diaper').length;
@@ -896,9 +945,12 @@ function renderLog() {
       }
       detailLine = parts.join(' · ');
     }
-    if (e.type==='sleep' && e.duration_min) {
+    if (e.type==='sleep') {
       const loc = e.detail ? e.detail.split(' · ')[0] : '';
-      detailLine = (loc?loc+' · ':'')+fmtSleep(e.duration_min);
+      const dur = e.duration_min ? fmtSleep(e.duration_min) : '';
+      const times = (e.sleep_start && e.sleep_end) ? e.sleep_start+' → '+e.sleep_end : '';
+      const parts = [loc, times, dur].filter(Boolean);
+      detailLine = parts.join(' · ');
     }
     const carerBadge = e.caregiver ? `<span class="ecarer">${e.caregiver}</span>` : '';
     return `<div class="entry">
