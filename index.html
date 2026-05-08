@@ -170,19 +170,9 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         <!-- Feed -->
         <div id="ff-feed">
           <div class="field-row">
-            <div class="field">
-              <div class="flbl">Milk prepared · <span>准备了多少毫升</span></div>
-              <input type="number" id="f-prepared" placeholder="e.g. 90 ml" min="0" max="500" step="5">
-            </div>
-            <div class="field">
-              <div class="flbl">Milk left · <span>剩余毫升</span></div>
-              <input type="number" id="f-left" placeholder="e.g. 10 ml" min="0" max="500" step="5">
-            </div>
-          </div>
-          <div class="field-row">
-            <div class="field">
-              <div class="flbl">Brand · <span>品牌</span></div>
-              <input type="text" id="f-brand" placeholder="e.g. Similac">
+            <div class="field" style="flex:0 0 160px">
+              <div class="flbl">Milk taken · <span>喝了多少毫升</span></div>
+              <input type="number" id="f-ml" placeholder="e.g. 80 ml" min="0" max="500" step="5">
             </div>
           </div>
         </div>
@@ -544,15 +534,8 @@ function resolveTime() {
 
 function getDetail() {
   if (activeType==='feed') {
-    const prepared=parseInt(document.getElementById('f-prepared').value)||0;
-    const left=parseInt(document.getElementById('f-left').value)||0;
-    const consumed=prepared>0?(prepared-left):0;
-    const brand=document.getElementById('f-brand').value;
-    let d=prepared?`Prepared ${prepared}ml`:'Formula feeding';
-    if (prepared>0) d+=` · Drank ${consumed}ml`;
-    if (left>0) d+=` · Left ${left}ml`;
-    if (brand) d+=' · '+brand;
-    return d;
+    const ml=parseInt(document.getElementById('f-ml').value)||0;
+    return ml?ml+'ml taken':'Formula feeding';
   }
   if (activeType==='sleep') {
     const totalMin = calcSleepDuration();
@@ -574,18 +557,14 @@ function saveEntry() {
   const sleepDurMin = activeType==='sleep' ? calcSleepDuration() : 0;
   const sleepStart  = activeType==='sleep' ? (document.getElementById('s-start').value||'') : '';
   const sleepEnd    = activeType==='sleep' ? (document.getElementById('s-end').value||'') : '';
-  const prepared = activeType==='feed'?(parseInt(document.getElementById('f-prepared').value)||0):0;
-  const left     = activeType==='feed'?(parseInt(document.getElementById('f-left').value)||0):0;
-  const consumed = prepared>0?(prepared-left):0;
+  const ml = activeType==='feed'?(parseInt(document.getElementById('f-ml').value)||0):0;
   const entry = {
     id: Date.now(),
     type: activeType,
     caregiver: document.getElementById('carer').value.split(' · ')[0],
     time: resolveTime(),
     detail: getDetail(),
-    ml: consumed,
-    ml_prepared: prepared,
-    ml_left: left,
+    ml: ml,
     duration_min: sleepDurMin,
     sleep_start: sleepStart,
     sleep_end: sleepEnd,
@@ -598,7 +577,7 @@ function saveEntry() {
 }
 
 function clearForm() {
-  ['f-prepared','f-left','f-brand','s-start','s-end','d-color','etime','notes'].forEach(id => {
+  ['f-ml','s-start','s-end','d-color','etime','notes'].forEach(id => {
     const el=document.getElementById(id); if(el) el.value='';
   });
   document.getElementById('etime').placeholder=nowHH();
@@ -710,54 +689,11 @@ function parseAndFill(text) {
   else if (sleepKw.test(t))  p.type='sleep';
   else if (feedKw.test(t))   p.type='feed';
 
-  // ── ML amounts — prepared and left ──────────────────────────────────
-  // Find all ml numbers in text
-  const mlPattern = /(\d+(?:\.\d+)?|[一二三四五六七八九十百两]+)\s*(?:ml|毫升|cc|mL)/gi;
-  const allMl = [];
-  let mlM;
-  while ((mlM=mlPattern.exec(t))!==null) {
-    const v=zhNum(mlM[1]); if(v&&v>0) allMl.push({val:v, idx:mlM.index, raw:mlM[0]});
-  }
-  // For each ml number, grab the 25 chars BEFORE it to find its label
-  function labelBefore(idx) { return t.slice(Math.max(0,idx-25), idx).toLowerCase(); }
-  const leftKw    = /left|remain|剩|余|没喝完|剩余/;
-  const prepKw    = /prepar|prepared|made|冲|准备|冲了|冲好/;
-
-  if (allMl.length>=2) {
-    // Score each number: does the text before it say "prepared" or "left"?
-    let prepIdx=-1, leftIdx2=-1;
-    allMl.forEach((m,i)=>{
-      const before = labelBefore(m.idx);
-      if (prepKw.test(before)) prepIdx=i;
-      if (leftKw.test(before))  leftIdx2=i;
-    });
-    if (prepIdx>=0 && leftIdx2>=0 && prepIdx!==leftIdx2) {
-      p.ml_prepared = allMl[prepIdx].val;
-      p.ml_left     = allMl[leftIdx2].val;
-    } else if (leftIdx2>=0) {
-      // Only "left" keyword found — the other number is prepared
-      p.ml_left     = allMl[leftIdx2].val;
-      p.ml_prepared = allMl[leftIdx2===0?1:0].val;
-    } else if (prepIdx>=0) {
-      // Only "prepared" keyword found — the other number is left
-      p.ml_prepared = allMl[prepIdx].val;
-      p.ml_left     = allMl[prepIdx===0?1:0].val;
-    } else {
-      // No keywords — assume first = prepared, second = left (natural speech order)
-      p.ml_prepared = allMl[0].val;
-      p.ml_left     = allMl[1].val;
-    }
-    p.ml = Math.max(0, p.ml_prepared - p.ml_left);
-    p.type = p.type || 'feed';
-  } else if (allMl.length===1) {
-    const before = labelBefore(allMl[0].idx);
-    if (leftKw.test(before)) {
-      p.ml_left = allMl[0].val;
-    } else {
-      p.ml_prepared = allMl[0].val;
-    }
-    p.ml = allMl[0].val;
-    p.type = p.type || 'feed';
+  // ── ML amount — single value (how much baby drank) ─────────────────
+  const mlMatch = t.match(/([一二三四五六七八九十百两]+|\d+(?:\.\d+)?)\s*(?:ml|毫升|cc|mL)/i);
+  if (mlMatch) {
+    const v = zhNum(mlMatch[1]);
+    if (v && v > 0) { p.ml = v; p.type = p.type || 'feed'; }
   }
 
   // ── Sleep duration ───────────────────────────────────────────────────
@@ -839,11 +775,7 @@ function parseAndFill(text) {
 function applyParsed(p, rawText) {
   if (p.type && ['feed','sleep','diaper','note'].includes(p.type)) selType(p.type);
 
-  if (p.ml_prepared) document.getElementById('f-prepared').value = p.ml_prepared;
-  if (p.ml_left !== undefined && p.ml_left >= 0) document.getElementById('f-left').value = p.ml_left;
-  // fallback: if only 'ml' parsed (consumed), put it as prepared
-  if (!p.ml_prepared && p.ml) document.getElementById('f-prepared').value = p.ml;
-  if (p.brand) document.getElementById('f-brand').value = p.brand;
+  if (p.ml) document.getElementById('f-ml').value = p.ml;
 
   if (p.sleep_start) document.getElementById('s-start').value = p.sleep_start;
   if (p.sleep_end)   document.getElementById('s-end').value   = p.sleep_end;
@@ -915,7 +847,6 @@ function renderLog() {
   const tod=entries.filter(e=>new Date(e.time).toDateString()===today);
   const todF=tod.filter(e=>e.type==='feed');
   const todMlConsumed=todF.reduce((s,e)=>s+(e.ml||0),0);
-  const todMlPrepared=todF.reduce((s,e)=>s+(e.ml_prepared||e.ml||0),0);
   const todSleepMin=tod.filter(e=>e.type==='sleep').reduce((s,e)=>s+(e.duration_min||0),0);
   document.getElementById('st-ml').textContent=todMlConsumed+'ml';
   document.getElementById('st-sleep').textContent=fmtSleep(todSleepMin);
@@ -932,18 +863,7 @@ function renderLog() {
     // Build smart detail line for feed
     let detailLine = e.detail || '';
     if (e.type==='feed') {
-      const consumed = e.ml || 0;
-      const prepared = e.ml_prepared || consumed;
-      const left = e.ml_left != null ? e.ml_left : (prepared - consumed);
-      const parts = [];
-      if (prepared) parts.push(`Prepared ${prepared}ml`);
-      if (consumed) parts.push(`Drank ${consumed}ml`);
-      if (left > 0)  parts.push(`Left ${left}ml`);
-      if (e.ml_brand || (e.detail && e.detail.includes('·'))) {
-        const brand = e.detail ? e.detail.split('·').slice(-1)[0].trim() : '';
-        if (brand && !brand.includes('ml') && !brand.includes('Prepared') && !brand.includes('Drank')) parts.push(brand);
-      }
-      detailLine = parts.join(' · ');
+      detailLine = e.ml ? e.ml+'ml taken' : (e.detail||'Formula feeding');
     }
     if (e.type==='sleep') {
       const loc = e.detail ? e.detail.split(' · ')[0] : '';
